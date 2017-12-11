@@ -8,16 +8,16 @@ from torch.autograd import Variable
 from collections import OrderedDict
 
 
-class AttentionalBiGRU(nn.Module):
+class AttentionalBiRNN(nn.Module):
 
     def __init__(self, inp_size, hid_size, dropout=0, RNN_cell=nn.GRU):
-        super(AttentionalBiGRU, self).__init__()
+        super(AttentionalBiRNN, self).__init__()
         self.register_buffer("mask",torch.FloatTensor())
 
         natt = hid_size*2
         self.gru = RNN_cell(input_size=inp_size,hidden_size=hid_size,num_layers=1,bias=True,batch_first=True,dropout=dropout,bidirectional=True)
         self.att_w = nn.Linear(natt,1,bias=False) # v transpose is here
-        
+
         self.att_u = nn.Linear(inp_size,natt,bias=False)
         self.att_h = nn.Linear(natt,natt,bias = False)
         self.att_i = nn.Linear(inp_size,natt) # holds the bias of tanh(w_h*h+w_u*u+w_i*i + b)
@@ -80,8 +80,8 @@ class HierarchicalDoc(nn.Module):
         I.normal(self.items.weight.data,0.01,0.01)
 
 
-        self.word = AttentionalBiGRU(emb_size, emb_size//2)
-        self.sent = AttentionalBiGRU(emb_size, emb_size//2)
+        self.word = AttentionalBiRNN(emb_size, emb_size//2)
+        self.sent = AttentionalBiRNN(emb_size, emb_size//2)
 
         self.emb_size = emb_size
         self.lin_out = nn.Linear(emb_size,num_class)

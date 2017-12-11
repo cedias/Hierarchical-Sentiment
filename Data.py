@@ -5,6 +5,7 @@ from operator import itemgetter
 from collections import OrderedDict
 from random import choice, shuffle
 from tqdm import tqdm
+import itertools
 
 import torch
 import torch.utils.data as data
@@ -180,7 +181,7 @@ class Vectorizer():
 
 
     def _get_words_dict(self,data,max_words):
-        word_counter = Counter(w.lower_ for d in self.nlp.tokenizer.pipe((doc for doc in tqdm(data,desc="Tokenizing data"))) for w in d)
+        word_counter = Counter(itertools.chain.from_iterable(w for s in data for w in s))
         dict_w =  {w: i for i,(w,_) in tqdm(enumerate(word_counter.most_common(max_words),start=2),desc="building word dict",total=max_words)}
         dict_w["_padding_"] = 0
         dict_w["_unk_word_"] = 1
@@ -207,13 +208,12 @@ class Vectorizer():
         
         for rev in t:
             review = []
-            for j,sent in enumerate(self.nlp(rev).sents):  
+            for j,sent in enumerate(rev):  
 
                 if trim and j>= self.max_sent_len:
                     break
                 s = []
                 for k,word in enumerate(sent):
-                    word = word.lower_
 
                     if trim and k >= self.max_word_len:
                         break

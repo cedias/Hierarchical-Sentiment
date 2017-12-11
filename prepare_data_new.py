@@ -1,0 +1,72 @@
+#import spacy
+import gzip
+import argparse
+import logging
+import json
+import pickle as pkl
+import spacy
+
+from tqdm import tqdm
+from random import randint,shuffle
+from collections import Counter, Iterator
+
+
+
+def count_lines(file):
+    count = 0
+    for _ in file:
+        count += 1
+    file.seek(0)
+    return count
+
+
+def build_dataset(args):
+
+
+    def data_generator(data):
+        with gzip.open(args.input,"r") as f:
+            for x in tqdm(f,desc="Reviews",total=count_lines(f)):
+                yield json.loads(x)
+
+    def extract_w(toked):
+        return [[w.orth_ for w in s] for s in toked.sents]
+
+    print("Building dataset from : {}".format(args.input))
+    print("-> Building {} random splits".format(args.nb_splits))
+
+    nlp = spacy.load('en')
+    data = [(z["reviewerID"],z["asin"],extract_w(tok),z["overall"]) for z,tok in zip(tqdm((z for z in data_generator(args.input)),desc="reading file"),nlp.pipe((x["reviewText"] for x in data_generator(args.input)), batch_size=10000, n_threads=8))]
+
+    print(data[0])
+    shuffle(data)
+
+    splits = [randint(0,args.nb_splits-1) for _ in range(0,len(data))]
+    count = Counter(splits)
+
+    print("Split distribution is the following:")
+    print(count)
+
+    return {"data":data,"splits":splits,"rows":("user_id","item_id","review","rating")}
+
+
+def main(args):
+    ds = build_dataset(args)
+    pkl.dump(ds,open(args.output,"wb"))
+
+if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input", type=str)
+    parser.add_argument("output", type=str, default="sentences.pkl")
+    parser.add_argument("--rescale",action="store_true")
+    parser.add_argument("--nb_splits",type=int, default=5)
+
+    parser.add_argument("--create-emb",action="store_true")
+    parser.add_argument("--emb-file", type=str, default=None)
+    parser.add_argument("--emb-size",type=int, default=100)
+    parser.add_argument("--dic-size", type=int,default=10000000)
+    parser.add_argument("--epochs", type=int,default=1)
+    args = parser.parse_args()
+
+
+    main(args)

@@ -221,9 +221,9 @@ def accuracy(out,truth):
 
     return all_eq, all_eq/truth.size(0)*100, max_i.float()
 
-def main(args):
 
-    print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
+def get_train_val_test(args):
+
     print("\nLoading Data:\n" + 25*"-")
 
     max_features = args.max_feat
@@ -245,24 +245,22 @@ def main(args):
 
     user_mapping = train_set.set_mapping("user_id",offset=1) #creates user mapping
     item_mapping = train_set.set_mapping("item_id",offset=1) #creates item mapping
+    
     classes = train_set.set_mapping("rating") #creates class mapping
 
-    
     val_set.set_mapping("rating",classes) #set same class mapping
     val_set.set_mapping("user_id",user_mapping,unk=0) #sets same user mapping
     val_set.set_mapping("item_id",item_mapping,unk=0) #sets same item mapping
+
     test_set.set_mapping("rating",classes) #set same class mapping
     test_set.set_mapping("user_id",user_mapping,unk=0) #sets same user mapping
     test_set.set_mapping("item_id",item_mapping,unk=0) #sets same item mapping
-
 
     nusers = len(user_mapping)+1 #offset
     nitems = len(item_mapping)+1 #offset
     num_class = len(classes)
 
     print("{} users and {} items in train dataset".format(nusers-1,nitems-1))
-    
-    
     print(25*"-"+"\nClass stats:\n" + 25*"-")
     print("Train set:\n" + 10*"-")
 
@@ -293,6 +291,17 @@ def main(args):
     print(test_stats) 
     print(test_per)
 
+    
+
+    return train_set,val_set,test_set,nusers,nitems,num_class
+
+
+
+def main(args):
+
+    print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
+    
+    train_set, val_set, test_set ,nusers,nitems,num_class = get_train_val_test(args)
 
     print(25*"-" + "\nBuilding word vectors: \n"+"-"*25)
 
@@ -323,8 +332,9 @@ def main(args):
     val_set.set_transform("review",vecto)
     test_set.set_transform("review",vecto)
 
-    #train_set = train_set.prebuild()
-    #print(train_set[0])
+    train_set = train_set.prebuild()
+    val_set = val_set.prebuild()
+    test_set = test_set.prebuild()
 
     
     if args.balance:
