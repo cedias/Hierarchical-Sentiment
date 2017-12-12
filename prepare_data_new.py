@@ -5,6 +5,7 @@ import logging
 import json
 import pickle as pkl
 import spacy
+import itertools
 
 from tqdm import tqdm
 from random import randint,shuffle
@@ -22,6 +23,8 @@ def count_lines(file):
 
 def build_dataset(args):
 
+    def to_array_comp(doc):
+        return [[w.orth_ for w in s] for s in doc.sents]
 
     def data_generator(data):
         with gzip.open(args.input,"r") as f:
@@ -34,8 +37,13 @@ def build_dataset(args):
     print("Building dataset from : {}".format(args.input))
     print("-> Building {} random splits".format(args.nb_splits))
 
-    nlp = spacy.load('en')
-    data = [(z["reviewerID"],z["asin"],extract_w(tok),z["overall"]) for z,tok in zip(tqdm((z for z in data_generator(args.input)),desc="reading file"),nlp.pipe((x["reviewText"] for x in data_generator(args.input)), batch_size=10000, n_threads=8))]
+    def custom_pipeline(nlp):
+        return (nlp.tagger, nlp.parser,to_array_comp)
+
+    nlp = spacy.load('en', create_pipeline=custom_pipeline)
+    gen_a,gen_b = itertools.tee(data_generator(args.input),2)
+
+    data = [(z["reviewerID"],z["asin"],tok,z["overall"]) for z,tok in zip(tqdm((z for z in gen_a),desc="reading file"),nlp.pipe((x["reviewText"] for x in gen_b), batch_size=1000000, n_threads=8))]
 
     print(data[0])
     shuffle(data)
@@ -58,7 +66,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("input", type=str)
     parser.add_argument("output", type=str, default="sentences.pkl")
-    parser.add_argument("--rescale",action="store_true")
     parser.add_argument("--nb_splits",type=int, default=5)
 
     parser.add_argument("--create-emb",action="store_true")

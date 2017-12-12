@@ -1,5 +1,3 @@
-import spacy
-
 from collections import Counter
 from operator import itemgetter
 from collections import OrderedDict
@@ -175,7 +173,6 @@ class Vectorizer():
 
     def __init__(self,word_dict=None,max_sent_len=8,max_word_len=32):
         self.word_dict = word_dict
-        self.nlp = spacy.load('en')
         self.max_sent_len = max_sent_len
         self.max_word_len = max_word_len
 
