@@ -2,10 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as I
-import sys
-from operator import itemgetter
 from torch.autograd import Variable
-from collections import OrderedDict
 
 
 class EmbedAttention(nn.Module):
@@ -13,24 +10,20 @@ class EmbedAttention(nn.Module):
     def __init__(self, att_size):
         super(EmbedAttention, self).__init__()
         self.att_w = nn.Linear(att_size,1,bias=False)
-        self.register_buffer("mask",torch.FloatTensor())
 
     def forward(self,input,len_s):
         att = self.att_w(input).squeeze(-1)
-        out = self._masked_softmax(att,self._list_to_bytemask(list(len_s))).unsqueeze(-1)
+        out = self._masked_softmax(att,len_s).unsqueeze(-1)
         return out
-
-
-    def _list_to_bytemask(self,l):
-        mask = self.mask.resize_(l[0],len(l)).fill_(1)
-        for i,j in enumerate(l):
-            if j != l[0]:
-                mask[j:l[0],i] = 0
-        return mask
+        
     
-    def _masked_softmax(self,mat,mask):
+    def _masked_softmax(self,mat,len_s):
+        
+        len_s = torch.FloatTensor(len_s).type_as(mat.data).long()
+        idxes = torch.arange(0,int(len_s[0]),out=mat.data.new(int(len_s[0])).long()).unsqueeze(1)
+        mask = Variable((idxes<len_s.unsqueeze(0)).float(),requires_grad=False)
 
-        exp = torch.exp(mat) * Variable(mask,requires_grad=False)
+        exp = torch.exp(mat) * mask
         sum_exp = exp.sum(0,True)+0.0001
      
         return exp/sum_exp.expand_as(exp)
@@ -44,7 +37,7 @@ class AttentionalBiRNN(nn.Module):
         
         self.natt = hid_size*2
 
-        self.gru = RNN_cell(input_size=inp_size,hidden_size=hid_size,num_layers=1,bias=True,batch_first=True,dropout=dropout,bidirectional=True)
+        self.rnn = RNN_cell(input_size=inp_size,hidden_size=hid_size,num_layers=1,bias=True,batch_first=True,dropout=dropout,bidirectional=True)
         self.lin = nn.Linear(hid_size*2,self.natt)
         self.att_w = nn.Linear(self.natt,1,bias=False)
         self.emb_att = EmbedAttention(self.natt)
@@ -52,12 +45,12 @@ class AttentionalBiRNN(nn.Module):
     
     def forward(self, packed_batch):
         
-        rnn_sents,_ = self.gru(packed_batch)
+        rnn_sents,_ = self.rnn(packed_batch)
         enc_sents,len_s = torch.nn.utils.rnn.pad_packed_sequence(rnn_sents)
-        emb_h = F.tanh(self.lin(enc_sents.view(enc_sents.size(0)*enc_sents.size(1),-1))).view(enc_sents.size(0),-1,self.natt)
+
+        emb_h = F.tanh(self.lin(enc_sents))
 
         attended = self.emb_att(emb_h,len_s) * enc_sents
-
         return attended.sum(0,True).squeeze(0)
 
 
@@ -71,15 +64,14 @@ class UIAttentionalBiRNN(AttentionalBiRNN):
         self.register_buffer("mask",torch.FloatTensor())
         self.att_h = nn.Linear(inp_size*2+self.natt,self.natt,bias=True)
         
-       
         
     def forward(self, packed_batch,user_embs,item_embs):
         
-        rnn_sents,_ = self.gru(packed_batch)
+        rnn_sents,_ = self.rnn(packed_batch)
         enc_sents,len_s = torch.nn.utils.rnn.pad_packed_sequence(rnn_sents)
 
         uit = torch.cat([user_embs.expand_as(enc_sents),item_embs.expand_as(enc_sents),enc_sents],dim=-1)
-        summed = F.tanh(self.att_h(uit.view(uit.size(0)*uit.size(1),-1))).view(enc_sents.size(0),-1,self.natt)
+        summed = F.tanh(self.att_h(uit))
 
         return torch.sum(enc_sents * self.emb_att(summed,len_s),0)
 
