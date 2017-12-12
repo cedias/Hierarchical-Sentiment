@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
-from Nets import HierarchicalDoc
+from Nets import NSCUPA,HAN
 from Data import TuplesListDataset, Vectorizer, BucketSampler
 import sys
 
@@ -310,7 +310,7 @@ def main(args):
     if args.load:
         state = torch.load(args.load)
         vectorizer.word_dict = state["word_dic"]
-        net = HierarchicalDoc(ntoken=len(state["word_dic"]), nusers=nusers, nitems=nitems ,emb_size=state["embed.weight"].size(1),hid_size=state["sent.gru.weight_hh_l0"].size(1),num_class=state["lin_out.weight"].size(0))
+        net = NSCUPA(ntoken=len(state["word_dic"]), nusers=nusers, nitems=nitems ,emb_size=state["embed.weight"].size(1),hid_size=state["sent.gru.weight_hh_l0"].size(1),num_class=state["lin_out.weight"].size(0))
         del state["word_dic"]
         net.load_state_dict(state)
     else:
@@ -318,12 +318,12 @@ def main(args):
         if args.emb:
             tensor,dic = load_embeddings(args.emb)
             print(len(dic))
-            net = HierarchicalDoc(ntoken=len(dic), nusers=nusers, nitems=nitems ,emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=num_class)
+            net = NSCUPA(ntoken=len(dic), nusers=nusers, nitems=nitems ,emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=num_class)
             net.set_emb_tensor(torch.FloatTensor(tensor))
             vectorizer.word_dict = dic
         else:
             vectorizer.build_dict(train_set.field_gen("review"),args.max_feat)
-            net = HierarchicalDoc(ntoken=len(vectorizer.word_dict), nusers=nusers, nitems=nitems , emb_size=args.emb_size,hid_size=args.hid_size, num_class=num_class)
+            net = NSCUPA(ntoken=len(vectorizer.word_dict), nusers=nusers, nitems=nitems , emb_size=args.emb_size,hid_size=args.hid_size, num_class=num_class)
 
     def vecto(f):
         return vectorizer._vect_dict(f,True)
@@ -332,11 +332,11 @@ def main(args):
     val_set.set_transform("review",vecto)
     test_set.set_transform("review",vecto)
 
-    train_set = train_set.prebuild()
-    val_set = val_set.prebuild()
-    test_set = test_set.prebuild()
+    #train_set = train_set.prebuild()
+    #val_set = val_set.prebuild()
+    #test_set = test_set.prebuild()
 
-    print(set(x[3] for x in test_set))
+    #print(set(x[3] for x in test_set))
 
     
     if args.balance:
@@ -346,7 +346,6 @@ def main(args):
         dataloader_valid = DataLoader(val_set, batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
         dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch,drop_last=True)
     else:
-
         dataloader = DataLoader(train_set, batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
         dataloader_valid = DataLoader(val_set, batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
         dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
@@ -360,10 +359,10 @@ def main(args):
         criterion = torch.nn.CrossEntropyLoss()
       
 
-
     if args.cuda:
         net.cuda()
-    
+
+
     print("-"*20)
 
 
@@ -404,8 +403,8 @@ if __name__ == '__main__':
     parser.add_argument("--epochs", type=int,default=10)
     parser.add_argument("--clip-grad", type=float,default=1)
     parser.add_argument("--lr", type=float, default=0.01)
-    parser.add_argument("--max-words", type=int,default=16)
-    parser.add_argument("--max-sents",type=int,default=5)
+    parser.add_argument("--max-words", type=int,default=32)
+    parser.add_argument("--max-sents",type=int,default=32)
     parser.add_argument("--momentum",type=float,default=0.9)
     parser.add_argument("--multitrain",type=int,default=1)
     parser.add_argument("--emb", type=str)
