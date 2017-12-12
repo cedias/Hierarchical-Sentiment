@@ -16,21 +16,22 @@ class EmbedAttention(nn.Module):
         self.register_buffer("mask",torch.FloatTensor())
 
     def forward(self,input,len_s):
-        att= self.att_w(input).squeeze(-1).transpose(0,1)
-        return self._masked_softmax(att,self._list_to_bytemask(list(len_s))).transpose(0,1).unsqueeze(-1)
+        att = self.att_w(input).squeeze(-1)
+        out = self._masked_softmax(att,self._list_to_bytemask(list(len_s))).unsqueeze(-1)
+        return out
 
 
     def _list_to_bytemask(self,l):
-        mask = self.mask.resize_(len(l),l[0]).fill_(1)
+        mask = self.mask.resize_(l[0],len(l)).fill_(1)
         for i,j in enumerate(l):
             if j != l[0]:
-                mask[i,j:l[0]] = 0
+                mask[j:l[0],i] = 0
         return mask
     
     def _masked_softmax(self,mat,mask):
 
         exp = torch.exp(mat) * Variable(mask,requires_grad=False)
-        sum_exp = exp.sum(1,True)+0.0001
+        sum_exp = exp.sum(0,True)+0.0001
      
         return exp/sum_exp.expand_as(exp)
 
@@ -133,7 +134,7 @@ class NSCUPA(nn.Module):
         super(NSCUPA, self).__init__()
 
         self.embed = nn.Embedding(ntoken, emb_size, padding_idx=0)
-        
+
         self.users = nn.Embedding(nusers, emb_size)
         I.normal(self.users.weight.data,0.01,0.01)
         self.items = nn.Embedding(nitems, emb_size)
