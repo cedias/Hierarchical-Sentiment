@@ -14,18 +14,18 @@ from torch.utils.data.sampler import Sampler
 
 class TuplesListDataset(Dataset):
 
-    def __init__(self, tuplelist,rows):
+    def __init__(self, tuplelist,rows=None,immutable=False):
         super(TuplesListDataset, self).__init__()
         self.tuplelist = tuplelist
         self.mappings = {}
         self.rows = rows
+        self.immutable = immutable
 
-        print(rows)
     def __len__(self):
         return len(self.tuplelist)
 
     def __getitem__(self,index):
-        if len(self.mappings) == 0:
+        if len(self.mappings) == 0 or self.immutable:
             return self.tuplelist[index]
         else:
             t = list(self.tuplelist[index])
@@ -41,10 +41,18 @@ class TuplesListDataset(Dataset):
     def _f2i(self,field):
         if type(field) == int:
             return field
+
         if type(field) == str:
             return self.rows[field]
 
+        if type(field) == str and self.rows == None:
+            raise IndexError("field {} index is unknown, no rows attribute provided".format(field))
+
         raise IndexError("field {} doesn't exist".format(field))
+
+    def _check_immutable():
+        if self.immutable:
+            raise Exception("TuplesListDataset is immutable --> set self.immutable to False to override")
 
     def field_gen(self,field,transform=False):
         field = self._f2i(field)
@@ -54,7 +62,6 @@ class TuplesListDataset(Dataset):
         else:
             for x in self:
                 yield x[field]
-
 
     def get_stats(self,field):
         field = self._f2i(field)
@@ -73,7 +80,9 @@ class TuplesListDataset(Dataset):
         """
         Sets or creates a mapping for a tuple field. Mappings are {k:v} with keys starting at offset.
         """
+        self._check_immutable()
         field = self._f2i(field)
+
         if mapping is None:
             mapping = self.get_field_dict(field,offset)
 
@@ -89,11 +98,33 @@ class TuplesListDataset(Dataset):
         """
         sets a field transformation where transform is a function of the field i.e f(field) -> transformed
         """
+        self._check_immutable()
         field = self._f2i(field)
         self.mappings[field] = transform
 
-    def prebuild(self):
-        return [self[i] for i in tqdm(range(len(self)),total=len(self),desc="Prebuilding set")]
+    def prebuild(self,inplace=False,keep_maps=False,keep_trans=False):
+        """
+        pre-makes all transformations - usefull if they are heavy.
+        inplace -> object is modified inplace
+        keep_maps -> if inplace, to keep dictionnary mappings (functions are discarded.)
+        """
+        self._check_immutable()
+
+        if not inplace:
+            return TuplesListDataset([self[i] for i in tqdm(range(len(self)),total=len(self),desc="Prebuilding set")],rows=self.rows,immutable=True)
+        else:
+            for i in tqdm(range(len(self)),desc="Prebuilding set",total=len(self)):
+                self.tuplelist[i] = self[i]
+
+            if not keep_maps:
+                self.mappings = {}
+            else:
+                if not keep_transforms:
+                    self.mappings = {x:v for x,v in self.mappings.items() if type(v) == dict}
+
+            self.immutable = True 
+
+
 
     @staticmethod
     def build_train_test(datatuples,splits,split_num=0,validation=0.5,rows=None):
@@ -108,7 +139,6 @@ class TuplesListDataset(Dataset):
                 test.append(data)
             else:
                 train.append(data)
-
 
         if len(test) <= 0:
                 raise IndexError("Test set is empty - split {} probably doesn't exist".format(split_num))
@@ -125,7 +155,6 @@ class TuplesListDataset(Dataset):
 
             validation = test[-val_len:]
             test = test[:-val_len]
-
 
             return TuplesListDataset(train,rows),TuplesListDataset(validation,rows),TuplesListDataset(test,rows)
 
