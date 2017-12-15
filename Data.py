@@ -50,7 +50,7 @@ class TuplesListDataset(Dataset):
 
         raise IndexError("field {} doesn't exist".format(field))
 
-    def _check_immutable():
+    def _check_immutable(self):
         if self.immutable:
             raise Exception("TuplesListDataset is immutable --> set self.immutable to False to override")
 

@@ -115,10 +115,10 @@ def tuple_batch(l):
     ls = []
     batch_t = torch.zeros(len(stat),max_words).long()                          # (sents ordered by len)
     ui_indexs = torch.zeros(len(stat)).long()                                  # (sents original rev_n)
-    sent_order = torch.zeros(len(ordered_list_rev),max_sents).long().fill_(-1) # (rev_n,sent_n)
+    sent_order = torch.zeros(len(ordered_list_rev),max_sents).long().fill_(0) # (rev_n,sent_n)
 
     for i,s in enumerate(stat):
-        sent_order[s[1],s[2]] = i
+        sent_order[s[1],s[2]] = i+1
         ui_indexs[i]=s[1]
         batch_t[i,0:len(s[3])] = torch.LongTensor(s[3])
         ls.append(s[0])

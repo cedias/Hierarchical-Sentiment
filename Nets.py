@@ -147,11 +147,21 @@ class NSCUPA(nn.Module):
     
     def _reorder_sent(self,sents,sent_order,lr):
 
-        revs = Variable(self._buffers["reviews"].resize_(len(lr),lr[0],sents.size(1)).fill_(0), requires_grad=False)
+        #revs = Variable(self._buffers["reviews"].resize_(len(lr),lr[0],sents.size(1)).fill_(0), requires_grad=False)
         
-        for i,len_rev in enumerate(lr):
-            rev_s = sent_order[i,:len_rev]
-            revs[i,0:len_rev,:] = sents[rev_s]
+        sents = F.pad(sents,(0,0,1,0))
+        #rev_s = sents[sent_order[-1]]
+        revs = torch.cat([ sents[sent_order[i]].unsqueeze(0) for i,len_rev in enumerate(lr)],dim=0)
+        #print(revs)
+        return revs
+
+        # for i,len_rev in enumerate(lr):
+        #     rev_s = sent_order[i,:len_rev]
+        #     revs[i,0:len_rev,:] = sents[rev_s]
+
+            #print(sents[sent_order[i]])
+
+
 
         return revs
         
