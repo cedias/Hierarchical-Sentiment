@@ -145,25 +145,14 @@ class NSCUPA(nn.Module):
         self.embed.weight.data = emb_tensor
 
     
-    def _reorder_sent(self,sents,sent_order,lr):
-
-        #revs = Variable(self._buffers["reviews"].resize_(len(lr),lr[0],sents.size(1)).fill_(0), requires_grad=False)
+    def _reorder_sent(self,sents,sent_order):
         
-        sents = F.pad(sents,(0,0,1,0))
-        #rev_s = sents[sent_order[-1]]
-        revs = torch.cat([ sents[sent_order[i]].unsqueeze(0) for i,len_rev in enumerate(lr)],dim=0)
-        #print(revs)
-        return revs
-
-        # for i,len_rev in enumerate(lr):
-        #     rev_s = sent_order[i,:len_rev]
-        #     revs[i,0:len_rev,:] = sents[rev_s]
-
-            #print(sents[sent_order[i]])
-
-
+        sents = F.pad(sents,(0,0,1,0)) #adds a 0 to the top
+        revs = sents[sent_order.view(-1)]
+        revs = revs.view(sent_order.size(0),sent_order.size(1),sents.size(1))
 
         return revs
+
         
     
     def forward(self, batch_reviews,users,items,sent_order,ui_indexs,ls,lr):
@@ -181,7 +170,7 @@ class NSCUPA(nn.Module):
        
 
         sent_embs = self.word(packed_sents,emb_u,emb_i)
-        rev_embs = self._reorder_sent(sent_embs,sent_order,lr)
+        rev_embs = self._reorder_sent(sent_embs,sent_order)
 
         packed_rev = torch.nn.utils.rnn.pack_padded_sequence(rev_embs, lr,batch_first=True)
 
