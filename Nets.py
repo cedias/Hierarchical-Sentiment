@@ -82,63 +82,11 @@ class HAN(nn.Module):
     def __init__(self, ntoken, num_class, emb_size=200, hid_size=50):
         super(HAN, self).__init__()
 
+        self.emb_size = emb_size
         self.embed = nn.Embedding(ntoken, emb_size,padding_idx=0)
-        self.word = AttentionalBiGRU(emb_size, hid_size)
-        self.sent = AttentionalBiGRU(hid_size*2, hid_size)
-
-        self.emb_size = emb_size
+        self.word = AttentionalBiRNN(emb_size, hid_size)
+        self.sent = AttentionalBiRNN(hid_size*2, hid_size)
         self.lin_out = nn.Linear(hid_size*2,num_class)
-        self.register_buffer("reviews",torch.Tensor())
-
-        
-    def set_emb_tensor(self,emb_tensor):
-        self.emb_size = emb_tensor.size(-1)
-        self.embed.weight.data = emb_tensor
-
-    
-    def _reorder_sent(self,sents,sent_order,lr):
-
-        revs = Variable(self._buffers["reviews"].resize_(len(lr),lr[0],sents.size(1)).fill_(0), requires_grad=False)
-        
-        for i,len_rev in enumerate(lr):
-            rev_s = sent_order[i,:len_rev]
-            revs[i,0:len_rev,:] = sents[rev_s]
-
-        return revs
-        
-    
-    def forward(self, batch_reviews,sent_order,ls,lr):
-
-        emb_w = F.dropout(self.embed(batch_reviews),training=self.training)
-        packed_sents = torch.nn.utils.rnn.pack_padded_sequence(emb_w, ls,batch_first=True)
-        sent_embs = self.word(packed_sents)
-        rev_embs = self._reorder_sent(sent_embs,sent_order,lr)
-        packed_rev = torch.nn.utils.rnn.pack_padded_sequence(rev_embs, lr,batch_first=True)
-        doc_embs = self.sent(packed_rev)
-        out = self.lin_out(doc_embs)
-
-        return out
-
-
-class NSCUPA(nn.Module):
-
-    def __init__(self, ntoken, nusers, nitems, num_class, emb_size=200, hid_size=50):
-        super(NSCUPA, self).__init__()
-
-        self.embed = nn.Embedding(ntoken, emb_size, padding_idx=0)
-
-        self.users = nn.Embedding(nusers, emb_size)
-        I.normal(self.users.weight.data,0.01,0.01)
-        self.items = nn.Embedding(nitems, emb_size)
-        I.normal(self.items.weight.data,0.01,0.01)
-
-
-        self.word = UIAttentionalBiRNN(emb_size, emb_size//2)
-        self.sent = UIAttentionalBiRNN(emb_size, emb_size//2)
-
-        self.emb_size = emb_size
-        self.lin_out = nn.Linear(emb_size,num_class)
-        self.register_buffer("reviews",torch.Tensor())
 
     def set_emb_tensor(self,emb_tensor):
         self.emb_size = emb_tensor.size(-1)
@@ -152,15 +100,39 @@ class NSCUPA(nn.Module):
         revs = revs.view(sent_order.size(0),sent_order.size(1),sents.size(1))
 
         return revs
+ 
 
-        
-    
+    def forward(self, batch_reviews,sent_order,ls,lr):
+
+        emb_w = F.dropout(self.embed(batch_reviews),training=self.training)
+        packed_sents = torch.nn.utils.rnn.pack_padded_sequence(emb_w, ls,batch_first=True)
+        sent_embs = self.word(packed_sents)
+        rev_embs = self._reorder_sent(sent_embs,sent_order)
+        packed_rev = torch.nn.utils.rnn.pack_padded_sequence(rev_embs, lr,batch_first=True)
+        doc_embs = self.sent(packed_rev)
+        out = self.lin_out(doc_embs)
+
+        return out
+
+
+class NSCUPA(HAN):
+
+    def __init__(self, ntoken, nusers, nitems, num_class, emb_size=200, hid_size=100):
+        super(NSCUPA, self).__init__(ntoken, num_class, emb_size, hid_size)
+
+        self.users = nn.Embedding(nusers, emb_size)
+        I.normal(self.users.weight.data,0.01,0.01)
+        self.items = nn.Embedding(nitems, emb_size)
+        I.normal(self.items.weight.data,0.01,0.01)
+
+        self.word = UIAttentionalBiRNN(emb_size, emb_size//2)
+        self.sent = UIAttentionalBiRNN(emb_size, emb_size//2)
+
+
     def forward(self, batch_reviews,users,items,sent_order,ui_indexs,ls,lr):
-        
         
         u = users[ui_indexs]
         i = items[ui_indexs]
-
 
         emb_w = F.dropout(self.embed(batch_reviews),training=self.training)
         emb_u = F.dropout(self.users(u),training=self.training)
@@ -168,7 +140,6 @@ class NSCUPA(nn.Module):
         
         packed_sents = torch.nn.utils.rnn.pack_padded_sequence(emb_w, ls,batch_first=True)
        
-
         sent_embs = self.word(packed_sents,emb_u,emb_i)
         rev_embs = self._reorder_sent(sent_embs,sent_order)
 

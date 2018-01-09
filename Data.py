@@ -65,7 +65,7 @@ class TuplesListDataset(Dataset):
 
     def get_stats(self,field):
         field = self._f2i(field)
-        d =  dict(Counter(self.field_gen(field)))
+        d =  dict(Counter(self.field_gen(field,True)))
         sumv = sum([v for k,v in d.items()])
         class_per = {k:(v/sumv) for k,v  in d.items()}
 
@@ -108,7 +108,7 @@ class TuplesListDataset(Dataset):
         inplace -> object is modified inplace
         keep_maps -> if inplace, to keep dictionnary mappings (functions are discarded.)
         """
-        self._check_immutable()
+        self._check_immutable() # already built.
 
         if not inplace:
             return TuplesListDataset([self[i] for i in tqdm(range(len(self)),total=len(self),desc="Prebuilding set")],rows=self.rows,immutable=True)
@@ -119,7 +119,7 @@ class TuplesListDataset(Dataset):
             if not keep_maps:
                 self.mappings = {}
             else:
-                if not keep_transforms:
+                if not keep_trans:
                     self.mappings = {x:v for x,v in self.mappings.items() if type(v) == dict}
 
             self.immutable = True 
@@ -127,10 +127,11 @@ class TuplesListDataset(Dataset):
 
 
     @staticmethod
-    def build_train_test(datatuples,splits,split_num=0,validation=0.5,rows=None):
+    def build_train_test(datatuples,splits,split_num=0,validation=0.5,rows=None,hide=None):
         """
         Builds train/val/test sets
         Validation set at 0.5 if n split is 5 gives an 80:10:10 split as usually used.
+        hi
         """
         train,test = [],[]
 
@@ -162,49 +163,12 @@ class TuplesListDataset(Dataset):
         
 
 
-class BucketSampler(Sampler):
-    """
-    Evenly sample from bucket for datalen
-    """
-
-    def __init__(self, dataset,field):
-        self.dataset = dataset
-        self.field = field
-        self.index_buckets = self._build_index_buckets()
-        self.len = min([len(x) for x in self.index_buckets.values()])
-
-    def __iter__(self):
-        return iter(self.bucket_iterator())
-
-    def __len__(self):
-        return self.len
-
-    def bucket_iterator(self):
-        cl = list(self.index_buckets.keys())
-   
-        for x in range(len(self)):
-            yield choice(self.index_buckets[choice(cl)])
-
-            
-    def _build_index_buckets(self):
-        class_index = {}
-        for ind,cl in enumerate(self.dataset.field_gen(self.field,True)):
-            if cl not in class_index:
-                class_index[cl] = [ind]
-            else:
-                class_index[cl].append(ind)
-        return class_index
-        
-
-
-
 class Vectorizer():
 
     def __init__(self,word_dict=None,max_sent_len=8,max_word_len=32):
         self.word_dict = word_dict
         self.max_sent_len = max_sent_len
         self.max_word_len = max_word_len
-
 
     def _get_words_dict(self,data,max_words):
         word_counter = Counter(itertools.chain.from_iterable(w for s in data for w in s))
@@ -219,7 +183,6 @@ class Vectorizer():
 
     def vectorize_batch(self,t,trim=True):
         return self._vect_dict(t,trim)
-
 
     def _vect_dict(self,t,trim):
 
