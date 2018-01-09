@@ -1,19 +1,9 @@
 from collections import Counter
-from operator import itemgetter
-from collections import OrderedDict
-from random import choice, shuffle
 from tqdm import tqdm
 import itertools
 
-import torch
-import torch.utils.data as data
-import torch.nn.functional as fn
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.data.sampler import Sampler
 
-
-
-class FMTL_iterator(Dataset):
+class FMTL_iterator():
     """
     Simple indexed iterator on FMTL
     """
@@ -21,7 +11,7 @@ class FMTL_iterator(Dataset):
         super(FMTL_iterator, self).__init__()
         self.fmtl = fmtl
         self.idxs = idxs
-        
+    
     def __getitem__(self,i):
         return self.fmtl[i]
     
@@ -72,8 +62,18 @@ class FMTL():
             return self.tuplelist[index]
         else:
             t = list(self.tuplelist[index])
+
             for i,m in self.mappings.items():
-                t[i] = self._rec_apply(m,t[i],self.unknown.get(i))
+                if type(m) is dict:
+                    t[i] = self._rec_apply(m.__getitem__,t[i],self.unknown.get(i))
+                else:
+                    try:
+                        t[i] = m(t[i])
+                    except:
+                        if self.unknown.get(i) is not None:
+                            return self.unknown.get(i)
+                        else:
+                            raise KeyError("No mapping or placeholder for value: {}".format(i))
 
             return tuple(t)
 
@@ -96,11 +96,6 @@ class FMTL():
 
         raise IndexError("field {} doesn't exist".format(field))
     
-    def _dic_or_fun(self,mapper):
-        if type(mapper) is dict:
-            return mapper.__getitem__
-        else:
-            return mapper
 
     def _rec_apply(self,f,item,unk=None):
         if isinstance(item,list) or isinstance(item,tuple):
@@ -120,7 +115,9 @@ class FMTL():
         Sets a mapping for a tuple field. Mappings are functions of a field value or dict
         """
         field = self._f2i(field)
-        self.mappings[field] = self._dic_or_fun(mapping)
+        #print(mapping)
+        #print(field)
+        self.mappings[field] = mapping
 
         if unk is not None:
             self.unknown[field] = unk
