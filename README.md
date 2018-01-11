@@ -15,8 +15,8 @@ This repository holds Pytorch (near)-implementations of the following papers:
 
 ## Quickstart:
     
-1.) `chmod +x minimal_ex_cuda.sh`
-2.)`./minimal_ex_cuda.sh`
+1.  `chmod +x minimal_ex_cuda.sh`
+2. `./minimal_ex_cuda.sh`
 
 ## Main Scripts:
 
