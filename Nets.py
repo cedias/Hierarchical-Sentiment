@@ -57,7 +57,7 @@ class AttentionalBiRNN(nn.Module):
 
 class UIAttentionalBiRNN(AttentionalBiRNN):
 
-    def __init__(self, inp_size, hid_size, dropout=0, RNN_cell=nn.GRU):
+    def __init__(self, inp_size, hid_size, dropout=0, RNN_cell=nn.LSTM):
 
         super(UIAttentionalBiRNN, self).__init__(inp_size, hid_size, dropout, RNN_cell)
         

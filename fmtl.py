@@ -1,38 +1,29 @@
 from collections import Counter
-from tqdm import tqdm
 import itertools
 
 
-class FMTL_iterator():
+class FMTL_iterator():		
     """
     Simple indexed iterator on FMTL
     """
-    def __init__(self,fmtl,idxs):
-        super(FMTL_iterator, self).__init__()
+    def __init__(self, fmtl, idxs):
         self.fmtl = fmtl
         self.idxs = idxs
-    
-    def __getitem__(self,i):
-        return self.fmtl[i]
-    
+
+    def __getitem__(self, i):
+        return self.fmtl[self.idxs[i]]
+
     def __len__(self):
         return len(self.idxs)
 
     def __iter__(self):
         self.iter_idx = self.idxs.__iter__()
         return self
-    
+
     def __next__(self):
         idx = self.iter_idx.__next__()
         return self.fmtl[idx]
 
-    def prebuild(self):
-        return [x for x in tqdm(self,desc="Prebuilding")]
-        
-    @staticmethod
-    def from_seq(fmtl,idxs):
-        return tuple([FMTL_iterator(fmtl,idx) for idx in idxs])
-        
 
 class FMTL():
     
@@ -42,6 +33,9 @@ class FMTL():
     """
 
     def __init__(self, tuplelist,rows=None):
+        if type(rows) is tuple or list:
+            rows = {x:i for i,x in enumerate(rows)}
+            
         self.tuplelist = tuplelist
         self.mappings = {}
         self.unknown = {}
@@ -126,12 +120,19 @@ class FMTL():
 
     def field_gen(self, field, key_iter=None):
         field = self._f2i(field)
-        if key_iter is not None:
-            for x in key_iter:
-                yield x[field]
-        else:
-            for x in self:
-                yield x[field]
+
+        if key_iter is None:
+            key_iter = range(len(self))
+
+        for idx in key_iter:
+            yield self[idx][field]
+        
+
+    def indexed_iter(self,idxs):
+        """
+        returns a FMTL_iterator object which is the same FMTL instance which only iterates on the idxs slice.
+        """
+        return FMTL_iterator(self,idxs)
 
     def get_stats(self, field, key_iter=None, verbose=False):
         """
@@ -167,48 +168,6 @@ class FMTL():
         d2k = {c:i for i,c in enumerate(d_keys,offset)}
         return d2k
 
-    def prebuild(self):
-        """
-        Freeze mappings into a new FMTL instance.
-        """
-        return FMTL([x for x in tqdm(self,desc="Prebuilding")],self.rows)
 
-    @staticmethod
-    def from_list(datatuples,splits,split_num=0,validation=0.5,rows=None):
-        """
-        Builds train/val/test indexes sets from tuple list and split list
-        Validation set at 0.5 if n split is 5 gives an 80:10:10 split as usually used.
-        """
-        train,test = [],[]
-
-        for idx,split in tqdm(enumerate(splits),total=len(splits),desc="Building train/test of split #{}".format(split_num)):
-            if split == split_num:
-                test.append(idx)
-            else:
-                train.append(idx)
-
-        if len(test) <= 0:
-                raise IndexError("Test set is empty - split {} probably doesn't exist".format(split_num))
-
-        if rows and type(rows) is tuple:
-            rows = {v:k for k,v in enumerate(rows)}
-            print("Tuples rows are the following:")
-            print(rows)
-
-        if validation > 0:
-
-            if 0 < validation < 1:
-                val_len = int(validation * len(test))
-
-            validation = test[-val_len:]
-            test = test[:-val_len]
-
-        else:
-            validation = []
-
-        idxs = [train,test,validation]
-        fmtl = FMTL(datatuples,rows)
-        iters = FMTL_iterator.from_seq(fmtl,idxs)
-
-        return (fmtl,iters)
+    
 

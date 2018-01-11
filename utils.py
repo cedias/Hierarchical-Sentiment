@@ -2,6 +2,7 @@
 import torch
 from tqdm import tqdm
 from torch.autograd import Variable
+from fmtl import FMTL
 
 
 def tuple2var(tensors,data):
@@ -70,3 +71,42 @@ def load_embeddings(file,offset=0):
 
     return tensor, word_d
 
+
+
+def FMTL_train_val_test(datatuples,splits,split_num=0,validation=0.5,rows=None):
+    """
+    Builds train/val/test indexes sets from tuple list and split list
+    Validation set at 0.5 if n split is 5 gives an 80:10:10 split as usually used.
+    """
+    train,test = [],[]
+
+    for idx,split in tqdm(enumerate(splits),total=len(splits),desc="Building train/test of split #{}".format(split_num)):
+        if split == split_num:
+            test.append(idx)
+        else:
+            train.append(idx)
+
+    if len(test) <= 0:
+            raise IndexError("Test set is empty - split {} probably doesn't exist".format(split_num))
+
+    if rows and type(rows) is tuple:
+        rows = {v:k for k,v in enumerate(rows)}
+        print("Tuples rows are the following:")
+        print(rows)
+
+    if validation > 0:
+
+        if 0 < validation < 1:
+            val_len = int(validation * len(test))
+
+        validation = test[-val_len:]
+        test = test[:-val_len]
+
+    else:
+        validation = []
+
+    idxs = (train,test,validation)
+    fmtl = FMTL(datatuples,rows)
+    iters = idxs
+
+    return (fmtl,iters)

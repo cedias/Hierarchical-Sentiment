@@ -128,7 +128,7 @@ def test(epoch,net,dataset,cuda,msg="Evaluating"):
 def load(args):
 
     datadict = pkl.load(open(args.filename,"rb"))
-    data_tl,(trainit,valit,testit) = FMTL.from_list(datadict["data"],datadict["splits"],args.split,validation=0.5,rows=datadict["rows"])
+    data_tl,(trainit,valit,testit) = FMTL_train_val_test(datadict["data"],datadict["splits"],args.split,validation=0.5,rows=datadict["rows"])
 
     rating_mapping = data_tl.get_field_dict("rating",key_iter=trainit) #creates class mapping
     data_tl.set_mapping("rating",rating_mapping) 
@@ -146,16 +146,14 @@ def load(args):
         wdict["_unk_"] = 1
     
     if args.max_words > 0 and args.max_sents > 0:
-        print("limiting review and sentence length")
+        print("==> Limiting review and sentence length: ({} sents of {} words) ".format(args.max_sents,args.max_words))
         data_tl.set_mapping("review",(lambda f:[[wdict.get(w[:args.max_words],1) for w in s[:args.max_sents]] for s in f]))
     else:
-        data.tl.set_mapping("review",wdict,unk=1)
+        data_tl.set_mapping("review",wdict,unk=1)
 
-    print("Train set:\n" + 10*"-")
-    class_stats,class_per = data_tl.get_stats("rating",trainit,True)
 
-    print(10*"-" + "\n Validation set:\n" + 10*"-")
-    val_stats,val_per = data_tl.get_stats("rating",valit,True)
+    print("Train set class stats:\n" + 10*"-")
+    _,_ = data_tl.get_stats("rating",trainit,True)
 
     if args.load:
         #print(state.keys())
@@ -171,21 +169,20 @@ def load(args):
             net = HAN(ntoken=len(wdict), emb_size=args.emb_size,hid_size=args.hid_size, num_class=len(rating_mapping))
 
     if args.prebuild:
-        trainit = trainit.prebuild()
-        testit = testit.prebuild()
-        valit = valit.prebuild()
+        data_tl = FMTL(list(x for x  in tqdm(data_tl,desc="prebuilding")),data_tl.rows)
 
-    return trainit,valit,testit,net, wdict
+    return data_tl,(trainit,valit,testit), net, wdict
 
 
 def main(args):
 
     print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
-    train_set, val_set, test_set, net, wdict = load(args)
+    data_tl, (train_set, val_set, test_set), net, wdict = load(args)
 
-    dataloader = DataLoader(train_set, batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
-    dataloader_valid = DataLoader(val_set, batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
-    dataloader_test = DataLoader(test_set, batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
+
+    dataloader = DataLoader(data_tl.indexed_iter(train_set), batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
+    dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
+    dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
 
     criterion = torch.nn.CrossEntropyLoss()      
 
@@ -194,7 +191,7 @@ def main(args):
 
     print("-"*20)
 
-    optimizer = optim.Adam(net.parameters())
+    optimizer = optim.RMSprop(net.parameters())
     torch.nn.utils.clip_grad_norm(net.parameters(), args.clip_grad)
 
     for epoch in range(1, args.epochs + 1):
@@ -228,8 +225,8 @@ if __name__ == '__main__':
     parser.add_argument("--b-size", type=int, default=32)
 
     parser.add_argument("--emb", type=str)
-    parser.add_argument("--max-words", type=int,default=16)
-    parser.add_argument("--max-sents",type=int,default=16)
+    parser.add_argument("--max-words", type=int,default=-1)
+    parser.add_argument("--max-sents",type=int,default=-1)
 
     parser.add_argument("--split", type=int, default=0)
     parser.add_argument("--load", type=str)
