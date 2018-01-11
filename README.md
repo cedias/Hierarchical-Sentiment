@@ -34,4 +34,4 @@ This repository holds Pytorch (near)-implementations of the following papers:
 
 ## Note
 
-This code has been written for python-3.6. If you are using python-2.7 you may want to reconsider your laziness, parenthesis on prints aren't that bad...
+This code has been written for python-3.6. If you are only using python-2.7, switch. 
