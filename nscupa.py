@@ -22,11 +22,19 @@ def save(net, dic, path):
     torch.save(dict_m,path)
 
 def tuple_batch(l):
+
+    def min_one(rev):
+        if len(rev)==0:
+            rev = [[1]]
+        return rev
+
     user, item, review,rating = zip(*l)
     r_t = torch.Tensor(rating).long()
     u_t = torch.Tensor(user).long()
     i_t = torch.Tensor(item).long()
-    list_rev = review
+
+    list_rev = [min_one(x) for x in review]
+
 
     sorted_r = sorted([(len(r),r_n,r) for r_n,r in enumerate(list_rev) ],reverse=True) #index by desc rev_le
     lr, r_n, ordered_list_rev = zip(*sorted_r)

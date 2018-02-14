@@ -36,9 +36,16 @@ def tuple_batch(l):
     - Split reviews by sentences which are reordered by length
     - Build sentence ordering index to extract each sentences in training loop
     """
+    def min_one(rev):
+        if len(rev)==0:
+            rev = [[1]]
+        return rev
+
     _,_,review,rating = zip(*l)
     r_t = torch.Tensor(rating).long()
-    list_rev = review
+    
+    list_rev = [min_one(x) for x in review]
+
 
     sorted_r = sorted([(len(r),r_n,r) for r_n,r in enumerate(list_rev)],reverse=True) #index by desc rev_le
     lr,r_n,ordered_list_rev = zip(*sorted_r)
