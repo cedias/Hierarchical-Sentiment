@@ -15,6 +15,9 @@ from Data import TuplesListDataset, Vectorizer
 from fmtl import FMTL
 from utils import *
 import sys
+import quiviz
+import logging
+
 
 
 def save(net,dic,path):
@@ -60,7 +63,7 @@ def tuple_batch(l):
 
     return batch_t,r_t,sent_order,ls,lr,review
 
-
+@quiviz.log
 def train(epoch,net,optimizer,dataset,criterion,cuda):
     net.train()
     epoch_loss = 0
@@ -91,10 +94,10 @@ def train(epoch,net,optimizer,dataset,criterion,cuda):
             pbar.set_postfix({"acc":ok_all/(iteration+1),"CE":epoch_loss/(iteration+1),"mseloss":mean_mse/(iteration+1),"rmseloss":mean_rmse/(iteration+1)})
 
     print("===> Epoch {} Complete: Avg. Loss: {:.4f}, {}% accuracy".format(epoch, epoch_loss /len(dataset),ok_all/len(dataset)))
+    return {"train_acc": ok_all/len(dataset)}
 
-
-
-def test(epoch,net,dataset,cuda,msg="Evaluating"):
+@quiviz.log
+def test(epoch,net,dataset,cuda,msg="test"):
     net.eval()
     epoch_loss = 0
     ok_all = 0
@@ -123,6 +126,7 @@ def test(epoch,net,dataset,cuda,msg="Evaluating"):
 
 
     print("===> {} Complete:  {}% accuracy".format(msg,ok_all/pred))
+    return {f"{msg}_acc": ok_all/pred}
 
 
 def load(args):
@@ -191,18 +195,29 @@ def main(args):
 
     print("-"*20)
 
+    last_acc = 0
+
     optimizer = optim.Adam(net.parameters())
     torch.nn.utils.clip_grad_norm(net.parameters(), args.clip_grad)
 
     for epoch in range(1, args.epochs + 1):
         print("\n-------EPOCH {}-------".format(epoch))
+        logging.info("\n-------EPOCH {}-------".format(epoch))
+
         train(epoch,net,optimizer,dataloader,criterion,args.cuda)
 
         if args.snapshot:
             print("snapshot of model saved as {}".format(args.save+"_snapshot"))
             save(net,wdict,args.save+"_snapshot")
 
-        test(epoch,net,dataloader_valid,args.cuda,msg="Validation")
+        val = test(epoch,net,dataloader_valid,args.cuda,msg="val")
+        new_acc = list(val.values())[0]
+
+        if new_acc < last_acc:
+            logging.info("---- EARLY STOPPING")
+            sys.exit()
+        last_acc = new_acc
+
         test(epoch,net,dataloader_test,args.cuda)
 
     if args.save:
@@ -238,5 +253,5 @@ if __name__ == '__main__':
     parser.add_argument("--output", type=str)
     parser.add_argument('filename', type=str)
     args = parser.parse_args()
-
+    logging.info("========== NEW XP =============")
     main(args)
