@@ -16,6 +16,43 @@ from fmtl import FMTL
 from utils import *
 import sys
 
+from random import choice
+from torch.utils.data.sampler import Sampler
+
+class BucketSampler(Sampler):
+    """
+    Evenly sample from bucket for datalen
+    """
+
+    def __init__(self, dataset,field):
+        self.dataset = dataset
+        self.field = field
+        self.index_buckets = self._build_index_buckets()
+        self.len = min([len(x) for x in self.index_buckets.values()])
+
+    def __iter__(self):
+        return iter(self.bucket_iterator())
+
+    def __len__(self):
+        return self.len
+
+    def bucket_iterator(self):
+        cl = list(self.index_buckets.keys())
+   
+        for x in range(len(self)):
+            yield choice(self.index_buckets[choice(cl)])
+
+            
+    def _build_index_buckets(self):
+        class_index = {}
+        for ind,t in enumerate(self.dataset):
+            cl = t[self.field]
+            if cl not in class_index:
+                class_index[cl] = [ind]
+            else:
+                class_index[cl].append(ind)
+        return class_index
+
 
 def save(net,dic,path):
     """
@@ -180,10 +217,20 @@ def main(args):
     print(32*"-"+"\nHierarchical Attention Network:\n" + 32*"-")
     data_tl, (train_set, val_set, test_set), net, wdict = load(args)
 
+    if args.sample:
+        bsv = BucketSampler(data_tl.indexed_iter(val_set),3)
+        bst = BucketSampler(data_tl.indexed_iter(test_set),3)
+
 
     dataloader = DataLoader(data_tl.indexed_iter(train_set), batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
-    dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
-    dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
+
+    if args.sample:
+        dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, sampler=bsv,  num_workers=3, collate_fn=tuple_batch)
+        dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, sampler=bst, num_workers=3, collate_fn=tuple_batch,drop_last=True)
+    
+    else:
+        dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
+        dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
 
     criterion = torch.nn.CrossEntropyLoss()      
 
@@ -225,6 +272,8 @@ if __name__ == '__main__':
     parser.add_argument("--momentum",type=float,default=0.9)
     parser.add_argument("--b-size", type=int, default=32)
     parser.add_argument("--fix",action='store_true')
+    parser.add_argument("--sample",action='store_true')
+
 
     parser.add_argument("--emb", type=str)
     parser.add_argument("--max-words", type=int,default=-1)
