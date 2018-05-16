@@ -79,7 +79,7 @@ class UIAttentionalBiRNN(AttentionalBiRNN):
 
 class HAN(nn.Module):
 
-    def __init__(self, ntoken, num_class, emb_size=200, hid_size=50):
+    def __init__(self, ntoken, num_class, emb_size=200, hid_size=50,fix=False):
         super(HAN, self).__init__()
 
         self.emb_size = emb_size
@@ -87,6 +87,22 @@ class HAN(nn.Module):
         self.word = AttentionalBiRNN(emb_size, hid_size)
         self.sent = AttentionalBiRNN(hid_size*2, hid_size)
         self.lin_out = nn.Linear(hid_size*2,num_class)
+
+        print(fix)
+
+        if fix:
+            self.lin_out.weight.data = torch.ones(self.lin_out.weight.size())
+            z = torch.zeros(1,100)
+            
+            self.lin_out.weight.data[0,:100] = z
+            self.lin_out.weight.data[1,:100] = z
+            self.lin_out.weight.data[2,50:150] = z
+            self.lin_out.weight.data[3,100:] = z
+            self.lin_out.weight.data[4,100:] = z
+
+            print(self.lin_out.weight)
+            self.lin_out.requires_grad=False
+    
 
     def set_emb_tensor(self,emb_tensor):
         self.emb_size = emb_tensor.size(-1)

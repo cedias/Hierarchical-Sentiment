@@ -10,7 +10,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
-from Nets import NSCUPA, HAN
+from Nets import  HAN
 from Data import TuplesListDataset, Vectorizer
 from fmtl import FMTL
 from utils import *
@@ -131,6 +131,7 @@ def load(args):
     data_tl,(trainit,valit,testit) = FMTL_train_val_test(datadict["data"],datadict["splits"],args.split,validation=0.5,rows=datadict["rows"])
 
     rating_mapping = data_tl.get_field_dict("rating",key_iter=trainit) #creates class mapping
+    rating_mapping = {v:i for i,v in enumerate(sorted(list(rating_mapping.keys()))) }
     data_tl.set_mapping("rating",rating_mapping) 
 
     if args.load:
@@ -163,10 +164,10 @@ def load(args):
 
     else:
         if args.emb:
-            net = HAN(ntoken=len(wdict),emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=len(rating_mapping))
+            net = HAN(ntoken=len(wdict),emb_size=len(tensor[1]),hid_size=args.hid_size,num_class=len(rating_mapping),fix=args.fix)
             net.set_emb_tensor(torch.FloatTensor(tensor))
         else:
-            net = HAN(ntoken=len(wdict), emb_size=args.emb_size,hid_size=args.hid_size, num_class=len(rating_mapping))
+            net = HAN(ntoken=len(wdict), emb_size=args.emb_size,hid_size=args.hid_size, num_class=len(rating_mapping),fix=args.fix)
 
     if args.prebuild:
         data_tl = FMTL(list(x for x  in tqdm(data_tl,desc="prebuilding")),data_tl.rows)
@@ -223,6 +224,7 @@ if __name__ == '__main__':
     parser.add_argument("--lr", type=float, default=0.01)
     parser.add_argument("--momentum",type=float,default=0.9)
     parser.add_argument("--b-size", type=int, default=32)
+    parser.add_argument("--fix",action='store_true')
 
     parser.add_argument("--emb", type=str)
     parser.add_argument("--max-words", type=int,default=-1)
