@@ -135,6 +135,7 @@ def test(epoch,net,dataset,cuda,msg="Evaluating"):
     net.eval()
     epoch_loss = 0
     ok_all = 0
+    num = 0
     pred = 0
     skipped = 0
     mean_mse = 0
@@ -147,6 +148,7 @@ def test(epoch,net,dataset,cuda,msg="Evaluating"):
             out  = net(data[0],data[2],ls,lr)
             ok,per,val_i = accuracy(out,data[1])
 
+            num += data[0].size(0)
 
             mseloss = F.mse_loss(val_i,data[1].float())
             mean_rmse += math.sqrt(mseloss.data[0])
@@ -156,7 +158,7 @@ def test(epoch,net,dataset,cuda,msg="Evaluating"):
             pred+=1
 
             pbar.update(1)
-            pbar.set_postfix({"acc":ok_all/pred, "skipped":skipped,"mseloss":mean_mse/(iteration+1),"rmseloss":mean_rmse/(iteration+1)})
+            pbar.set_postfix({"acc":ok_all/pred, "skipped":skipped,"mseloss":mean_mse/(num),"rmseloss":mean_rmse/(num)})
 
 
     print("===> {} Complete:  {}% accuracy".format(msg,ok_all/pred))
