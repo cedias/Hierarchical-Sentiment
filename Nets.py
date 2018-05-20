@@ -87,7 +87,7 @@ class HAN(nn.Module):
         self.word = AttentionalBiRNN(emb_size, hid_size)
         self.sent = AttentionalBiRNN(hid_size*2, hid_size)
         self.lin_out = nn.Linear(hid_size*2,num_class)
-        self.compress = nn.Linear(hid_size*2,hid_size)
+        self.compress = nn.Linear(hid_size*2,hid_size*2)
 
         print(fix)
 
