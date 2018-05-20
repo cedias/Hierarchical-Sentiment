@@ -91,14 +91,14 @@ class HAN(nn.Module):
         print(fix)
 
         if fix:
-            self.lin_out.weight.data = torch.ones(self.lin_out.weight.size())
-            z = torch.zeros(1,100)
+            self.lin_out.weight.data = torch.zeros(self.lin_out.weight.size())
             
-            self.lin_out.weight.data[0,:100] = z
-            self.lin_out.weight.data[1,:100] = z
-            self.lin_out.weight.data[2,50:150] = z
-            self.lin_out.weight.data[3,100:] = z
-            self.lin_out.weight.data[4,100:] = z
+            
+            self.lin_out.weight.data[0,:50] = 1
+            self.lin_out.weight.data[1,50:100] = 1
+            self.lin_out.weight.data[2,:] = 1
+            self.lin_out.weight.data[3,100:150] = 1
+            self.lin_out.weight.data[4,150:200] = 1
 
             print(self.lin_out.weight)
             self.lin_out.requires_grad=False
