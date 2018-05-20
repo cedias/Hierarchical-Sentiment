@@ -87,6 +87,7 @@ class HAN(nn.Module):
         self.word = AttentionalBiRNN(emb_size, hid_size)
         self.sent = AttentionalBiRNN(hid_size*2, hid_size)
         self.lin_out = nn.Linear(hid_size*2,num_class)
+        self.compress = nn.Linear(hid_size*2,hid_size)
 
         print(fix)
 
@@ -126,7 +127,10 @@ class HAN(nn.Module):
         rev_embs = self._reorder_sent(sent_embs,sent_order)
         packed_rev = torch.nn.utils.rnn.pack_padded_sequence(rev_embs, lr,batch_first=True)
         doc_embs = self.sent(packed_rev)
-        out = self.lin_out(doc_embs)
+
+        s_p = F.relu(self.compress(doc_embs))
+
+        out = self.lin_out(s_p)
 
         return out
 
