@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as I
-from torch.autograd import Variable
 
 
 class EmbedAttention(nn.Module):
@@ -19,9 +18,10 @@ class EmbedAttention(nn.Module):
     
     def _masked_softmax(self,mat,len_s):
         
-        len_s = torch.FloatTensor(len_s).type_as(mat.data).long()
+        #print(len_s.type())
+        len_s = len_s.type_as(mat.data)#.long()
         idxes = torch.arange(0,int(len_s[0]),out=mat.data.new(int(len_s[0])).long()).unsqueeze(1)
-        mask = Variable((idxes<len_s.unsqueeze(0)).float(),requires_grad=False)
+        mask = (idxes.float()<len_s.unsqueeze(0)).float()
 
         exp = torch.exp(mat) * mask
         sum_exp = exp.sum(0,True)+0.0001
