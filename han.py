@@ -13,7 +13,6 @@ from Nets import NSCUPA, HAN
 from Data import TuplesListDataset, Vectorizer
 from fmtl import FMTL
 from utils import *
-from sklearn.metrics import confusion_matrix
 import sys
 
 
@@ -61,7 +60,7 @@ def tuple_batch(l):
     return batch_t,r_t,sent_order,ls,lr,review
 
 
-def train(epoch,net,dataset,msg="val/test",optimize=False,optimizer=None,criterion=None):
+def train(epoch,net,dataset,device,msg="val/test",optimize=False,optimizer=None,criterion=None):
 
     if optimize:
         net.train()
@@ -78,6 +77,7 @@ def train(epoch,net,dataset,msg="val/test",optimize=False,optimizer=None,criteri
         for iteration, (batch_t,r_t,sent_order,ls,lr,review) in enumerate(dataset):
 
             data = (batch_t,r_t,sent_order)
+            data = list(map(lambda x:x.to(device),data))
 
             if optimize:
                 optimizer.zero_grad()
@@ -160,12 +160,16 @@ def main(args):
     data_tl, (train_set, val_set, test_set), net, wdict = load(args)
 
 
-    dataloader = DataLoader(data_tl.indexed_iter(train_set[:25]), batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
+    dataloader = DataLoader(data_tl.indexed_iter(train_set), batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
     dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch)
     dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch)
 
-    criterion = torch.nn.CrossEntropyLoss()      
+    criterion = torch.nn.CrossEntropyLoss()
 
+    device = torch.device("cuda" if args.cuda else "cpu")
+
+    if args.cuda:
+        net.to(device)
 
     print("-"*20)
 
@@ -174,14 +178,14 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
         print("\n-------EPOCH {}-------".format(epoch))
-        train(epoch,net,dataloader,msg="training",optimize=True,optimizer=optimizer,criterion=criterion)
+        train(epoch,net,dataloader,device,msg="training",optimize=True,optimizer=optimizer,criterion=criterion)
 
         if args.snapshot:
             print("snapshot of model saved as {}".format(args.save+"_snapshot"))
             save(net,wdict,args.save+"_snapshot")
 
-        train(epoch,net,dataloader_valid,msg="Validation")
-        train(epoch,net,dataloader_test,msg="Evaluation")
+        train(epoch,net,dataloader_valid,device,msg="Validation")
+        train(epoch,net,dataloader_test,device,msg="Evaluation")
 
     if args.save:
         print("model saved to {}".format(args.save))
