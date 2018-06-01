@@ -8,7 +8,7 @@ Implementations are single-gpu batched.
 
 ## Requirements:
     
-- Pytorch 0.3
+- Pytorch 0.4
 - TQDM
 
 - Gensim (Only for `BuildW2VEmb.py` to build word embeddings with word2vec)
