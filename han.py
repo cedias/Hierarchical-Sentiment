@@ -6,7 +6,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import Sampler
 import torch.nn.functional as F
@@ -39,7 +38,7 @@ def tuple_batch(l):
 
     sorted_r = sorted([(len(r),r_n,r) for r_n,r in enumerate(list_rev)],reverse=True) #index by desc rev_le
     lr,r_n,ordered_list_rev = zip(*sorted_r)
-
+    lr = list(lr)
     max_sents = lr[0]
 
     #reordered
@@ -61,68 +60,49 @@ def tuple_batch(l):
     return batch_t,r_t,sent_order,ls,lr,review
 
 
-def train(epoch,net,optimizer,dataset,criterion,cuda):
-    net.train()
+def train(epoch,net,dataset,device,msg="val/test",optimize=False,optimizer=None,criterion=None):
+
+    if optimize:
+        net.train()
+    else:
+        net.eval()
+
     epoch_loss = 0
     mean_mse = 0
     mean_rmse = 0
     ok_all = 0
-    data_tensors = new_tensors(3,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor}) #data-tensors
+    #data_tensors = new_tensors(3,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor}) #data-tensors
 
-    with tqdm(total=len(dataset),desc="Training") as pbar:
+    with tqdm(total=len(dataset),desc=msg) as pbar:
         for iteration, (batch_t,r_t,sent_order,ls,lr,review) in enumerate(dataset):
 
-            data = tuple2var(data_tensors,(batch_t,r_t,sent_order))
-            optimizer.zero_grad()
+            data = (batch_t,r_t,sent_order)
+            data = list(map(lambda x:x.to(device),data))
+
+            if optimize:
+                optimizer.zero_grad()
+
+           
             out = net(data[0],data[2],ls,lr)
 
             ok,per,val_i = accuracy(out,data[1])
-            ok_all += per.data[0]
+            ok_all += per.item()
 
             mseloss = F.mse_loss(val_i,data[1].float())
-            mean_rmse += math.sqrt(mseloss.data[0])
-            mean_mse += mseloss.data[0]
-            loss =  criterion(out, data[1]) 
-            epoch_loss += loss.data[0]
-            loss.backward()
-            optimizer.step()
+            mean_rmse += math.sqrt(mseloss.item())
+            mean_mse += mseloss.item()
+
+            if optimize:
+                loss =  criterion(out, data[1]) 
+                epoch_loss += loss.item()
+                loss.backward()
+                optimizer.step()
 
             pbar.update(1)
             pbar.set_postfix({"acc":ok_all/(iteration+1),"CE":epoch_loss/(iteration+1),"mseloss":mean_mse/(iteration+1),"rmseloss":mean_rmse/(iteration+1)})
 
     print("===> Epoch {} Complete: Avg. Loss: {:.4f}, {}% accuracy".format(epoch, epoch_loss /len(dataset),ok_all/len(dataset)))
 
-
-
-def test(epoch,net,dataset,cuda,msg="Evaluating"):
-    net.eval()
-    epoch_loss = 0
-    ok_all = 0
-    pred = 0
-    skipped = 0
-    mean_mse = 0
-    mean_rmse = 0
-    data_tensors = new_tensors(3,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor}) #data-tensors
-    
-    with tqdm(total=len(dataset),desc=msg) as pbar:
-        for iteration, (batch_t,r_t,sent_order,ls,lr,review) in enumerate(dataset):
-            data = tuple2var(data_tensors,(batch_t,r_t,sent_order))
-            out  = net(data[0],data[2],ls,lr)
-            ok,per,val_i = accuracy(out,data[1])
-
-
-            mseloss = F.mse_loss(val_i,data[1].float())
-            mean_rmse += math.sqrt(mseloss.data[0])
-            mean_mse += mseloss.data[0]
-
-            ok_all += per.data[0]
-            pred+=1
-
-            pbar.update(1)
-            pbar.set_postfix({"acc":ok_all/pred, "skipped":skipped,"mseloss":mean_mse/(iteration+1),"rmseloss":mean_rmse/(iteration+1)})
-
-
-    print("===> {} Complete:  {}% accuracy".format(msg,ok_all/pred))
 
 
 def load(args):
@@ -181,13 +161,15 @@ def main(args):
 
 
     dataloader = DataLoader(data_tl.indexed_iter(train_set), batch_size=args.b_size, shuffle=True, num_workers=3, collate_fn=tuple_batch,pin_memory=True)
-    dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False,  num_workers=3, collate_fn=tuple_batch)
-    dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch,drop_last=True)
+    dataloader_valid = DataLoader(data_tl.indexed_iter(val_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch)
+    dataloader_test = DataLoader(data_tl.indexed_iter(test_set), batch_size=args.b_size, shuffle=False, num_workers=3, collate_fn=tuple_batch)
 
-    criterion = torch.nn.CrossEntropyLoss()      
+    criterion = torch.nn.CrossEntropyLoss()
+
+    device = torch.device("cuda" if args.cuda else "cpu")
 
     if args.cuda:
-        net.cuda()
+        net.to(device)
 
     print("-"*20)
 
@@ -196,14 +178,14 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
         print("\n-------EPOCH {}-------".format(epoch))
-        train(epoch,net,optimizer,dataloader,criterion,args.cuda)
+        train(epoch,net,dataloader,device,msg="training",optimize=True,optimizer=optimizer,criterion=criterion)
 
         if args.snapshot:
             print("snapshot of model saved as {}".format(args.save+"_snapshot"))
             save(net,wdict,args.save+"_snapshot")
 
-        test(epoch,net,dataloader_valid,args.cuda,msg="Validation")
-        test(epoch,net,dataloader_test,args.cuda)
+        train(epoch,net,dataloader_valid,device,msg="Validation")
+        train(epoch,net,dataloader_test,device,msg="Evaluation")
 
     if args.save:
         print("model saved to {}".format(args.save))
