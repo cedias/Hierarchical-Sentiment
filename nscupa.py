@@ -28,6 +28,8 @@ def tuple_batch(l):
 
     sorted_r = sorted([(len(r),r_n,r) for r_n,r in enumerate(list_rev) ],reverse=True) #index by desc rev_le
     lr, r_n, ordered_list_rev = zip(*sorted_r)
+    
+    lr = list(lr)
 
     max_sents = lr[0]
     #reordered
@@ -53,36 +55,49 @@ def tuple_batch(l):
     return batch_t,r_t,u_t,i_t,sent_order,ui_indexs,ls,lr,review
 
 
-def train(epoch,net,optimizer,dataset,criterion,cuda):
-    net.train()
+
+def train(epoch,net,dataset,device,msg="val/test",optimize=False,optimizer=None,criterion=None):
+
+    if optimize:
+        net.train()
+    else:
+        net.eval()
+
     epoch_loss = 0
     mean_mse = 0
     mean_rmse = 0
     ok_all = 0
-    data_tensors = new_tensors(6,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor,3:torch.LongTensor,4:torch.LongTensor,5:torch.LongTensor}) #data-tensors
+    #data_tensors = new_tensors(3,cuda,types={0:torch.LongTensor,1:torch.LongTensor,2:torch.LongTensor}) #data-tensors
 
-    with tqdm(total=len(dataset),desc="Training") as pbar:
+    with tqdm(total=len(dataset),desc=msg) as pbar:
         for iteration, (batch_t,r_t,u_t,i_t,sent_order,ui_indexs,ls,lr,review) in enumerate(dataset):
 
-            data = tuple2var(data_tensors,(batch_t,r_t,u_t,i_t,sent_order,ui_indexs))
-            optimizer.zero_grad()
+            data = (batch_t,r_t,u_t,i_t,sent_order,ui_indexs)
+            data = list(map(lambda x:x.to(device),data))
+
+            if optimize:
+                optimizer.zero_grad()
+
+           
             out = net(data[0],data[2],data[3],data[4],data[5],ls,lr)
 
             ok,per,val_i = accuracy(out,data[1])
-            ok_all += per.data[0]
+            ok_all += per.item()
+
             mseloss = F.mse_loss(val_i,data[1].float())
-            mean_rmse += math.sqrt(mseloss.data[0])
-            mean_mse += mseloss.data[0]
-            loss =  criterion(out, data[1]) 
-            epoch_loss += loss.data[0]
-            loss.backward()
-            optimizer.step()
+            mean_rmse += math.sqrt(mseloss.item())
+            mean_mse += mseloss.item()
+
+            if optimize:
+                loss =  criterion(out, data[1]) 
+                epoch_loss += loss.item()
+                loss.backward()
+                optimizer.step()
 
             pbar.update(1)
             pbar.set_postfix({"acc":ok_all/(iteration+1),"CE":epoch_loss/(iteration+1),"mseloss":mean_mse/(iteration+1),"rmseloss":mean_rmse/(iteration+1)})
 
     print("===> Epoch {} Complete: Avg. Loss: {:.4f}, {}% accuracy".format(epoch, epoch_loss /len(dataset),ok_all/len(dataset)))
-
 
 
 def test(epoch,net,dataset,cuda,msg="Evaluating"):
@@ -178,8 +193,10 @@ def main(args):
 
     criterion = torch.nn.CrossEntropyLoss()      
 
+    device = torch.device("cuda" if args.cuda else "cpu")
+
     if args.cuda:
-        net.cuda()
+        net.to(device)
 
     print("-"*20)
 
@@ -188,14 +205,14 @@ def main(args):
 
     for epoch in range(1, args.epochs + 1):
         print("\n-------EPOCH {}-------".format(epoch))
-        train(epoch,net,optimizer,dataloader,criterion,args.cuda)
+        train(epoch,net,dataloader,device,msg="training",optimize=True,optimizer=optimizer,criterion=criterion)
 
         if args.snapshot:
             print("snapshot of model saved as {}".format(args.save+"_snapshot"))
             save(net,wdict,args.save+"_snapshot")
 
-        test(epoch,net,dataloader_valid,args.cuda,msg="Validation")
-        test(epoch,net,dataloader_test,args.cuda)
+        train(epoch,net,dataloader_valid,device,msg="Validation")
+        train(epoch,net,dataloader_test,device,msg="Evaluation")
 
     if args.save:
         print("model saved to {}".format(args.save))
